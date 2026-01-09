@@ -11,14 +11,17 @@
 - 保存会话供下次使用
 - Telegram 通知
 
-## 安装
+## 安装 (uv)
 
 ```bash
+# 安装 uv (如果没有)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
 # 安装依赖
-pip install -r requirements.txt
+uv sync
 
 # 安装 Playwright 浏览器
-playwright install chromium
+uv run playwright install chromium
 ```
 
 ## 配置
@@ -34,9 +37,6 @@ vim .env
 配置项说明:
 
 ```env
-# YesCaptcha API Key (可选，用于解决验证码)
-YESCAPTCHA_API_KEY=your_api_key
-
 # 账号配置 (格式: email:password)
 # 多个账号用逗号分隔
 ACCOUNTS=email1@example.com:password1,email2@example.com:password2
@@ -49,11 +49,11 @@ TELEGRAM_CHAT_ID=your_chat_id
 ## 运行
 
 ```bash
-# 在有显示器的环境
-python3 domain_renew.py
+# 使用 xvfb (推荐，更稳定)
+xvfb-run uv run python do_renew.py
 
-# 在无头服务器环境 (headless)
-xvfb-run python3 domain_renew.py
+# 或直接运行 (需要桌面环境)
+uv run python do_renew.py
 ```
 
 ## 定时任务
@@ -61,24 +61,26 @@ xvfb-run python3 domain_renew.py
 使用 cron 定期执行:
 
 ```bash
-# 每周执行一次 (周日凌晨 3 点)
-0 3 * * 0 cd /home/exedev/domain-renew && xvfb-run python3 domain_renew.py >> /var/log/domain-renew.log 2>&1
+crontab -e
+
+# 每周日凌晨 3 点运行
+0 3 * * 0 cd /path/to/domain-renew && xvfb-run uv run python do_renew.py >> /tmp/domain-renew.log 2>&1
 ```
 
 ## 目录结构
 
 ```
 domain-renew/
-├── domain_renew.py    # 主脚本
-├── .env               # 配置文件
-├── .env.example       # 配置模板
-├── requirements.txt   # Python 依赖
-├── sessions/          # 会话存储
-└── README.md          # 说明文档
+├── do_renew.py       # 主脚本
+├── pyproject.toml    # 项目配置
+├── .env              # 配置文件
+├── .env.example      # 配置模板
+├── sessions/         # 会话存储
+└── README.md
 ```
 
 ## 注意事项
 
 1. 免费域名通常有效期为 1 年，需要在到期前续期
-2. 建议每周或每月执行一次，避免忽略到期域名
-3. 如果 Cloudflare 验证失败，可以配置 YesCaptcha API Key
+2. 建议每周或每月执行一次
+3. `headless=False` 需要显示环境，所以要用 `xvfb-run`
