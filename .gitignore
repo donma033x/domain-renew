@@ -2,5 +2,4 @@
 sessions/
 renew_log_*.txt
 .venv/
-uv.lock
 __pycache__/
