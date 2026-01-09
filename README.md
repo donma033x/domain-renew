@@ -49,10 +49,6 @@ TELEGRAM_CHAT_ID=your_chat_id
 ## 运行
 
 ```bash
-# 使用 xvfb (推荐，更稳定)
-xvfb-run uv run python do_renew.py
-
-# 或直接运行 (需要桌面环境)
 uv run python do_renew.py
 ```
 
@@ -64,7 +60,7 @@ uv run python do_renew.py
 crontab -e
 
 # 每周日凌晨 3 点运行
-0 3 * * 0 cd /path/to/domain-renew && xvfb-run uv run python do_renew.py >> /tmp/domain-renew.log 2>&1
+0 3 * * 0 cd /path/to/domain-renew && /home/exedev/.local/bin/uv run python do_renew.py >> /tmp/domain-renew.log 2>&1
 ```
 
 ## 目录结构
@@ -83,4 +79,3 @@ domain-renew/
 
 1. 免费域名通常有效期为 1 年，需要在到期前续期
 2. 建议每周或每月执行一次
-3. `headless=False` 需要显示环境，所以要用 `xvfb-run`
