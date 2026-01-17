@@ -121,19 +121,21 @@ async def handle_turnstile(page, cdp):
         y = int(turnstile['y'] + 25)
         log(f"点击 Turnstile ({x}, {y})")
         await cdp_click(cdp, x, y)
-        
-        # 等待验证完成
-        for i in range(20):
-            await asyncio.sleep(1)
-            response = await page.evaluate('() => document.querySelector("input[name=cf-turnstile-response]")?.value || ""')
-            if len(response) > 10:
-                log("Turnstile 验证完成")
-                return True
-        log("Turnstile 验证超时")
     else:
         log("未找到 Turnstile 元素，尝试固定位置")
         await cdp_click(cdp, 477, 391)
-        await asyncio.sleep(3)
+    
+    # 无论哪种方式，都等待验证完成
+    for i in range(30):
+        await asyncio.sleep(1)
+        response = await page.evaluate('() => document.querySelector("input[name=cf-turnstile-response]")?.value || ""')
+        if len(response) > 10:
+            log("Turnstile 验证完成")
+            return True
+        if i % 5 == 4:
+            log(f"等待 Turnstile... ({i+1}/30)")
+    
+    log("Turnstile 验证超时")
     return False
 
 def parse_expire_date(text: str) -> str:
@@ -188,8 +190,12 @@ async def login(page, cdp, context, email, password):
         log("密码已输入")
     
     await asyncio.sleep(2)
-    await handle_turnstile(page, cdp)
-    await asyncio.sleep(3)
+    turnstile_ok = await handle_turnstile(page, cdp)
+    if not turnstile_ok:
+        log("Turnstile 验证失败，无法登录")
+        return False
+    
+    await asyncio.sleep(1)
     
     login_btn = await page.query_selector('button:has-text("Login")')
     if login_btn:
