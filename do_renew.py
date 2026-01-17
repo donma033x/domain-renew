@@ -106,8 +106,35 @@ async def handle_security(page, cdp):
     return True
 
 async def handle_turnstile(page, cdp):
-    await cdp_click(cdp, 477, 391)
-    await asyncio.sleep(3)
+    """处理 Turnstile 验证"""
+    log("等待 Turnstile 验证...")
+    
+    # 动态获取 Turnstile 位置
+    turnstile = await page.evaluate("""() => {
+        const el = document.querySelector('.cf-turnstile, [data-turnstile], iframe[src*="turnstile"]');
+        if (el) { const r = el.getBoundingClientRect(); return {x: r.x, y: r.y, w: r.width, h: r.height}; }
+        return null;
+    }""")
+    
+    if turnstile:
+        x = int(turnstile['x'] + 30)
+        y = int(turnstile['y'] + 25)
+        log(f"点击 Turnstile ({x}, {y})")
+        await cdp_click(cdp, x, y)
+        
+        # 等待验证完成
+        for i in range(20):
+            await asyncio.sleep(1)
+            response = await page.evaluate('() => document.querySelector("input[name=cf-turnstile-response]")?.value || ""')
+            if len(response) > 10:
+                log("Turnstile 验证完成")
+                return True
+        log("Turnstile 验证超时")
+    else:
+        log("未找到 Turnstile 元素，尝试固定位置")
+        await cdp_click(cdp, 477, 391)
+        await asyncio.sleep(3)
+    return False
 
 def parse_expire_date(text: str) -> str:
     match = re.search(r'Expire Date:\s*(\d{8})', text)
