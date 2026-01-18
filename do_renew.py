@@ -6,7 +6,7 @@ cron: 0 8 1 1,4,7,10 *
 new Env('domain-renew')
 
 环境变量:
-    ACCOUNTS_DOMAIN: 账号配置，格式: 邮箱:密码,邮箱2:密码2
+    DOMAIN_ACCOUNT: 账号配置，格式: 邮箱:密码,邮箱2:密码2
 """
 
 import os
@@ -19,7 +19,7 @@ from datetime import datetime
 from playwright.async_api import async_playwright
 
 # ==================== 从环境变量加载配置 ====================
-ACCOUNTS_STR = os.environ.get('ACCOUNTS_DOMAIN', '')
+ACCOUNTS_STR = os.environ.get('DOMAIN_ACCOUNT', '')
 
 SESSION_DIR = Path(__file__).parent / "sessions"
 LOG_FILE = Path(__file__).parent / f"renew_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
@@ -447,7 +447,7 @@ async def main():
     log("=" * 60)
     
     if not ACCOUNTS_STR:
-        log("错误: 未设置 ACCOUNTS_DOMAIN 环境变量")
+        log("错误: 未设置 DOMAIN_ACCOUNT 环境变量")
         return False
     
     accounts = parse_accounts(ACCOUNTS_STR)
