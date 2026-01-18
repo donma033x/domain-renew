@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
 """
-域名续期执行脚本 - 自动发现并续期所有域名 + Telegram 通知
+域名续期执行脚本 - 自动发现并续期所有域名
 
 cron: 0 8 1 1,4,7,10 *
 new Env('domain-renew')
 
 环境变量:
     ACCOUNTS_DOMAIN: 账号配置，格式: 邮箱:密码,邮箱2:密码2
-    TELEGRAM_BOT_TOKEN: Telegram机器人Token (可选)
-    TELEGRAM_CHAT_ID: Telegram聊天ID (可选)
 """
 
 import os
@@ -22,8 +20,6 @@ from playwright.async_api import async_playwright
 
 # ==================== 从环境变量加载配置 ====================
 ACCOUNTS_STR = os.environ.get('ACCOUNTS_DOMAIN', '')
-TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '')
-TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID', '')
 
 SESSION_DIR = Path(__file__).parent / "sessions"
 LOG_FILE = Path(__file__).parent / f"renew_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
@@ -51,17 +47,11 @@ def log(msg):
     with open(LOG_FILE, 'a') as f:
         f.write(line + '\n')
 
-def send_telegram(message: str) -> bool:
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        return False
-    try:
-        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-        payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "HTML"}
-        response = requests.post(url, json=payload, timeout=10)
-        return response.status_code == 200
-    except Exception as e:
-        log(f"Telegram 发送失败: {e}")
-        return False
+# 青龙通知
+try:
+    from notify import send as notify_send
+except ImportError:
+    def notify_send(title, content): log(f"[通知] {title}: {content}")
 
 async def cdp_click(cdp, x, y):
     await cdp.send('Input.dispatchMouseEvent', {'type': 'mouseMoved', 'x': x, 'y': y})
@@ -502,57 +492,71 @@ async def main():
     
     if all_results or errors:
         if errors and not all_results:
+            notify_title = "域名续期失败"
             emoji = "🚨"
             title = "域名续期失败 - 请检查"
         elif errors:
+            notify_title = "域名续期异常"
             emoji = "⚠️"
             title = "域名续期异常 - 部分账号失败"
         elif skip_count == len(all_results):
-            emoji = "💤"
-            title = "域名检查完成 - 暂无需续期"
+            notify_title = "域名检查完成"
+            emoji = "✅"
+            title = "域名检查完成 - 未发现临期域名"
         elif success_count == need_renew_count and need_renew_count > 0:
+            notify_title = "域名续期成功"
             emoji = "✅"
             title = "域名续期成功"
         elif success_count > 0:
+            notify_title = "域名续期部分成功"
             emoji = "⚠️"
             title = "域名续期部分成功"
         else:
+            notify_title = "域名续期完成"
             emoji = "ℹ️"
             title = "域名续期完成"
         
-        lines = [f"{emoji} <b>{title}</b>", ""]
+        lines = [f"{emoji} {title}", ""]
         
         if errors:
-            lines.append("<b>❌ 错误:</b>")
+            lines.append("❌ 错误:")
             for err in errors:
-                lines.append(f"   {err}")
+                lines.append(f"  {err}")
             lines.append("")
         
         if all_results:
-            for r in all_results:
-                if r.get('skip'):
-                    status = "⏭️"
-                elif r['success']:
-                    status = "✅"
-                else:
-                    status = "❌"
-                lines.append(f"{status} <code>{r['domain']}</code>")
-                lines.append(f"   到期: {r['new_expire'] or r['old_expire']}")
-                if r['error']:
-                    lines.append(f"   备注: {r['error']}")
+            # 统计
+            domains_checked = len(all_results)
+            domains_renewed = success_count
+            domains_skipped = skip_count
+            
+            if skip_count == len(all_results):
+                # 所有域名都不需要续期
+                lines.append(f"📋 共检查 {domains_checked} 个域名")
+                lines.append("🎉 所有域名有效期充足，无需续期")
+            else:
+                for r in all_results:
+                    if r.get('skip'):
+                        status = "⏭️"
+                    elif r['success']:
+                        status = "✅"
+                    else:
+                        status = "❌"
+                    lines.append(f"{status} {r['domain']}")
+                    expire = r['new_expire'] or r['old_expire']
+                    if expire and expire != '未知':
+                        lines.append(f"   到期: {expire}")
+                    if r['error']:
+                        lines.append(f"   备注: {r['error']}")
         
         lines.append("")
         lines.append(f"🕒 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         
         msg = "\n".join(lines)
-        if send_telegram(msg):
-            log("Telegram 通知已发送")
-        else:
-            log("Telegram 通知发送失败")
+        notify_send(notify_title, msg)
     else:
-        msg = f"🚨 <b>域名续期异常</b>\n\n未获取到任何域名信息，脚本可能运行异常\n\n🕒 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-        send_telegram(msg)
-        log("发送异常通知")
+        msg = f"🚨 域名续期异常\n\n未获取到任何域名信息，脚本可能运行异常\n\n🕒 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        notify_send("域名续期异常", msg)
     
     return (success_count > 0 or skip_count > 0) and not errors
 
